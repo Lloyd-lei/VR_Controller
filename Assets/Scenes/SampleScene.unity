@@ -255,9 +255,9 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 435689204}
-  - component: {fileID: 435689203}
-  - component: {fileID: 435689202}
-  - component: {fileID: 435689201}
+  - component: {fileID: 435689209}
+  - component: {fileID: 435689208}
+  - component: {fileID: 435689207}
   - component: {fileID: 435689206}
   - component: {fileID: 435689205}
   m_Layer: 0
@@ -267,69 +267,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &435689201
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 435689200}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 866133f36e1aa4918b5a6b96ffda1cdb, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TeleopManager
-  handTrackingController: {fileID: 435689203}
-  rosBridge: {fileID: 435689202}
-  cameraRig: {fileID: 881273970}
-  sendRate: 60
-  positionScale: 2
-  workspaceMin: {x: -1, y: -1, z: -1}
-  workspaceMax: {x: 1, y: 1, z: 1}
-  maxVelocity: 2
-  homePosition: {x: 0, y: 0.3, z: 0.3}
-  homeRotation: {x: 0, y: 0, z: 0, w: 1}
---- !u!114 &435689202
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 435689200}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d045e40cb73aa489a9e0b68083f6295e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: '::'
-  rosbridgeUrl: ws://192.168.1.77:9090
-  rightPoseTopic: /quest3/right_hand_pose
-  rightGripperTopic: /quest3/right_gripper
-  leftPoseTopic: /quest3/left_hand_pose
-  leftGripperTopic: /quest3/left_gripper
-  reconnectBaseInterval: 1.5
-  reconnectMaxInterval: 30
-  connectOnStart: 1
-  heartbeatInterval: 3
-  heartbeatFailThreshold: 2
---- !u!114 &435689203
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 435689200}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c2149f2f8776e4d879b12556b3683c58, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: '::'
-  rightOvrHand: {fileID: 2069375836}
-  rightOvrSkeleton: {fileID: 2069375835}
-  leftOvrHand: {fileID: 1507552188}
-  leftOvrSkeleton: {fileID: 1507552187}
-  currentMode: 0
-  requireHighConfidence: 1
-  gripEnableThreshold: 0.5
 --- !u!4 &435689204
 Transform:
   m_ObjectHideFlags: 0
@@ -354,13 +291,16 @@ MonoBehaviour:
   m_GameObject: {fileID: 435689200}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d5e8b5f28487d48a5ab07ec029027c6c, type: 3}
+  m_Script: {fileID: 11500000, guid: c2149f2f8776e4d879b12556b3683c58, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SettingsPanel
-  teleopManager: {fileID: 435689201}
-  cameraRig: {fileID: 881273970}
-  panelDistance: 0.8
-  toggleKey: 9
+  m_EditorClassIdentifier: Assembly-CSharp::HandTrackingController
+  rightOvrHand: {fileID: 2069375836}
+  rightOvrSkeleton: {fileID: 2069375835}
+  leftOvrHand: {fileID: 1507552188}
+  leftOvrSkeleton: {fileID: 1507552187}
+  currentMode: 0
+  requireHighConfidence: 1
+  gripEnableThreshold: 0.5
 --- !u!114 &435689206
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -373,9 +313,69 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 11d63cd5b4f9043ec831e36b87000564, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::IronManHUD
-  teleopManager: {fileID: 435689201}
+  teleopManager: {fileID: 435689209}
   hudDistance: 1.2
   followSmoothSpeed: 3
+--- !u!114 &435689207
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 435689200}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d045e40cb73aa489a9e0b68083f6295e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ROSBridgeConnection
+  rosbridgeUrl: ws://192.168.1.82:9090
+  rightPoseTopic: /quest3/right_hand_pose
+  rightGripperTopic: /quest3/right_gripper
+  leftPoseTopic: /quest3/left_hand_pose
+  leftGripperTopic: /quest3/left_gripper
+  clutchTopic: /quest3/clutch
+  reconnectBaseInterval: 2
+  reconnectMaxInterval: 30
+  connectOnStart: 1
+  heartbeatInterval: 3
+  heartbeatFailThreshold: 2
+--- !u!114 &435689208
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 435689200}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5e8b5f28487d48a5ab07ec029027c6c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SettingsPanel
+  teleopManager: {fileID: 435689209}
+  cameraRig: {fileID: 881273970}
+  panelDistance: 0.8
+  toggleKey: 9
+--- !u!114 &435689209
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 435689200}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 866133f36e1aa4918b5a6b96ffda1cdb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TeleopManager
+  handTrackingController: {fileID: 435689205}
+  rosBridge: {fileID: 435689207}
+  cameraRig: {fileID: 881273970}
+  sendRate: 90
+  positionScale: 1
+  useHeadInWorldPositionReference: 1
+  workspaceMin: {x: -1, y: -1, z: -1}
+  workspaceMax: {x: 1, y: 1, z: 1}
+  maxVelocity: 2
 --- !u!1 &563109473
 GameObject:
   m_ObjectHideFlags: 0

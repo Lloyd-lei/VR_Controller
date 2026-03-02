@@ -198,14 +198,9 @@ public class SettingsPanel : MonoBehaviour
         // ═══ Section 5: QUICK ACTIONS ═══
         MakeSection(canvasObj.transform, "ActionsSection", ref yTop, "✦  QUICK ACTIONS");
         CreateActionButton(canvasObj.transform, "CalibrateBtn",
-            new Vector2(0.06f, yTop - 0.07f), new Vector2(0.48f, yTop - 0.01f),
+            new Vector2(0.06f, yTop - 0.07f), new Vector2(0.94f, yTop - 0.01f),
             "CALIBRATE",
             () => { if (teleopManager != null) teleopManager.Calibrate(); });
-
-        CreateActionButton(canvasObj.transform, "HomeBtn",
-            new Vector2(0.52f, yTop - 0.07f), new Vector2(0.94f, yTop - 0.01f),
-            "SEND HOME",
-            () => { if (teleopManager != null) teleopManager.SendHome(); });
         yTop -= 0.10f;
 
         // ═══ URL Display ═══

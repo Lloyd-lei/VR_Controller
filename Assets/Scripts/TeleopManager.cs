@@ -3,7 +3,7 @@ using UnityEngine;
 /// <summary>
 /// 遥操作主管理器（v2 精简版）
 ///
-/// 职责：协调双手输入采集、Clutch 开关、网络发送、安全限制、校准/归位。
+/// 职责：协调双手输入采集、Clutch 开关、网络发送、安全限制、校准。
 /// 所有 UI 已迁移至 IronManHUD / SettingsPanel。
 ///
 /// Clutch 现为简单 bool 属性，由 SettingsPanel 或左手小指 Pinch 手势控制。
@@ -24,8 +24,11 @@ public class TeleopManager : MonoBehaviour
     [SerializeField] private float sendRate = 60f;
 
     [Header("坐标映射")]
-    [Tooltip("手部运动到机械臂的缩放倍数")]
-    [SerializeField] private float positionScale = 2.0f;
+    [Tooltip("手部运动到机械臂的缩放倍数（1.0 = 1:1映射）")]
+    [SerializeField] private float positionScale = 1.0f;
+
+    [Tooltip("使用头部位置参考（手位置相对头部，但旋转解耦）- 适合坐姿操作")]
+    [SerializeField] private bool useHeadInWorldPositionReference = true;
 
     // ══════════════════════════════════════════════════
     //                  安全限制
@@ -38,13 +41,6 @@ public class TeleopManager : MonoBehaviour
     [Tooltip("最大位移速度 (m/s)")]
     [SerializeField] private float maxVelocity = 2.0f;
 
-    // ══════════════════════════════════════════════════
-    //                  归位预设
-    // ══════════════════════════════════════════════════
-
-    [Header("归位预设")]
-    [SerializeField] private Vector3 homePosition = new Vector3(0f, 0.3f, 0.3f);
-    [SerializeField] private Quaternion homeRotation = Quaternion.identity;
 
     // ══════════════════════════════════════════════════
     //           公开属性（供 HUD / SettingsPanel）
@@ -70,6 +66,10 @@ public class TeleopManager : MonoBehaviour
 
             // 播放扫频音效
             PlayClutchSound(_clutchEngaged);
+            
+            // 发送 Clutch 状态到 ROS
+            if (rosBridge != null && rosBridge.IsConnected)
+                rosBridge.PublishClutch(_clutchEngaged);
 
             if (_clutchEngaged)
             {
@@ -109,6 +109,28 @@ public class TeleopManager : MonoBehaviour
     {
         get => maxVelocity;
         set => maxVelocity = Mathf.Clamp(value, 0.05f, 5f);
+    }
+
+    /// <summary>
+    /// 是否使用头部位置参考模式
+    /// true = 手位置相对头部（坐姿操作，转头不影响）
+    /// false = 手位置相对世界（WBC/locomotion 需要）
+    /// </summary>
+    public bool UseHeadInWorldPositionReference
+    {
+        get => useHeadInWorldPositionReference;
+        set
+        {
+            if (useHeadInWorldPositionReference == value) return;
+            useHeadInWorldPositionReference = value;
+            // 切换模式时重新校准，避免位置跳变
+            if (_isRightCalibrated || _isLeftCalibrated)
+            {
+                Debug.Log($"[TeleopManager] 坐标参考模式切换为: {(value ? "头部位置参考" : "世界坐标")}，需要重新校准");
+                _isRightCalibrated = false;
+                _isLeftCalibrated = false;
+            }
+        }
     }
 
     /// <summary>右手是否已校准</summary>
@@ -410,10 +432,6 @@ public class TeleopManager : MonoBehaviour
         if (OVRInput.GetDown(OVRInput.Button.One))
             Calibrate();
 
-        // B 键 → 归位
-        if (OVRInput.GetDown(OVRInput.Button.Two))
-            SendHome();
-
         // 左手小指+拇指 pinch → 切换 Clutch
         UpdateClutchPinchGesture();
     }
@@ -466,6 +484,14 @@ public class TeleopManager : MonoBehaviour
         Vector3 rawPos = handTrackingController.RightTargetPosition;
         Quaternion rawRot = handTrackingController.RightTargetRotation;
 
+        // 头部位置参考模式：手位置相对于头部位置，但旋转保持世界坐标系（解耦）
+        // 这样转头不影响手坐标，但身体移动也不影响（手和头一起动）
+        if (useHeadInWorldPositionReference && cameraRig != null)
+        {
+            Vector3 headPos = cameraRig.centerEyeAnchor.position;
+            rawPos = rawPos - headPos;  // 只减位置，不处理旋转
+        }
+
         Vector3 pos; Quaternion rot;
         if (_isRightCalibrated)
         {
@@ -485,6 +511,10 @@ public class TeleopManager : MonoBehaviour
         // 发送
         rosBridge.PublishRightPose(pos, rot);
         rosBridge.PublishRightGripper(handTrackingController.RightGripperValue);
+        rosBridge.PublishRightIndexRelative(handTrackingController.RightIndexRelativeToWrist);
+        rosBridge.PublishRightIndexRelativePose(
+            handTrackingController.RightIndexRelativeLocalPosition,
+            handTrackingController.RightIndexRelativeLocalRotation);
 
         _lastSentRightPosition = pos;
         _lastSentRightRotation = rot;
@@ -494,6 +524,13 @@ public class TeleopManager : MonoBehaviour
     {
         Vector3 rawPos = handTrackingController.LeftTargetPosition;
         Quaternion rawRot = handTrackingController.LeftTargetRotation;
+
+        // 头部位置参考模式：手位置相对于头部位置，但旋转保持世界坐标系（解耦）
+        if (useHeadInWorldPositionReference && cameraRig != null)
+        {
+            Vector3 headPos = cameraRig.centerEyeAnchor.position;
+            rawPos = rawPos - headPos;
+        }
 
         Vector3 pos; Quaternion rot;
         if (_isLeftCalibrated)
@@ -514,6 +551,10 @@ public class TeleopManager : MonoBehaviour
         // 发送
         rosBridge.PublishLeftPose(pos, rot);
         rosBridge.PublishLeftGripper(handTrackingController.LeftGripperValue);
+        rosBridge.PublishLeftIndexRelative(handTrackingController.LeftIndexRelativeToWrist);
+        rosBridge.PublishLeftIndexRelativePose(
+            handTrackingController.LeftIndexRelativeLocalPosition,
+            handTrackingController.LeftIndexRelativeLocalRotation);
 
         _lastSentLeftPosition = pos;
         _lastSentLeftRotation = rot;
@@ -532,16 +573,26 @@ public class TeleopManager : MonoBehaviour
             return;
         }
 
+        // 获取头部位置（如果使用头部参考模式）
+        Vector3 headPos = Vector3.zero;
+        if (useHeadInWorldPositionReference && cameraRig != null)
+        {
+            headPos = cameraRig.centerEyeAnchor.position;
+        }
+
         // 右手
         if (handTrackingController.IsRightInputActive)
         {
-            _rightCalibrationOffset = handTrackingController.RightTargetPosition;
+            Vector3 rawPos = handTrackingController.RightTargetPosition;
+            // 校准时也要用相同的参考系
+            _rightCalibrationOffset = useHeadInWorldPositionReference ? (rawPos - headPos) : rawPos;
             _rightCalibrationRotation = handTrackingController.RightTargetRotation;
             _isRightCalibrated = true;
             _lastSentRightPosition = Vector3.zero;
             _lastSentRightRotation = Quaternion.identity;
             _lastSentRightTimestamp = 0f;
-            Debug.Log($"[TeleopManager] 右手校准完成 — 原点: {_rightCalibrationOffset}");
+            Debug.Log($"[TeleopManager] 右手校准完成 — 原点: {_rightCalibrationOffset}" +
+                      (useHeadInWorldPositionReference ? " (头部位置参考模式)" : " (世界坐标模式)"));
         }
         else
         {
@@ -551,13 +602,15 @@ public class TeleopManager : MonoBehaviour
         // 左手
         if (handTrackingController.IsLeftInputActive)
         {
-            _leftCalibrationOffset = handTrackingController.LeftTargetPosition;
+            Vector3 rawPos = handTrackingController.LeftTargetPosition;
+            _leftCalibrationOffset = useHeadInWorldPositionReference ? (rawPos - headPos) : rawPos;
             _leftCalibrationRotation = handTrackingController.LeftTargetRotation;
             _isLeftCalibrated = true;
             _lastSentLeftPosition = Vector3.zero;
             _lastSentLeftRotation = Quaternion.identity;
             _lastSentLeftTimestamp = 0f;
-            Debug.Log($"[TeleopManager] 左手校准完成 — 原点: {_leftCalibrationOffset}");
+            Debug.Log($"[TeleopManager] 左手校准完成 — 原点: {_leftCalibrationOffset}" +
+                      (useHeadInWorldPositionReference ? " (头部位置参考模式)" : " (世界坐标模式)"));
         }
         else
         {
@@ -565,24 +618,6 @@ public class TeleopManager : MonoBehaviour
         }
 
         try { OnCalibrated?.Invoke(); } catch { }
-    }
-
-    // ══════════════════════════════════════════════════
-    //                    归位
-    // ══════════════════════════════════════════════════
-
-    /// <summary>发送预设归位位姿</summary>
-    public void SendHome()
-    {
-        if (rosBridge == null || !rosBridge.IsConnected)
-        {
-            Debug.LogWarning("[TeleopManager] 归位失败 — 未连接 ROS Bridge");
-            return;
-        }
-
-        rosBridge.PublishRightPose(homePosition, homeRotation);
-        rosBridge.PublishLeftPose(homePosition, homeRotation);
-        Debug.Log("[TeleopManager] 已发送归位指令");
     }
 
     // ══════════════════════════════════════════════════
@@ -621,10 +656,18 @@ public class TeleopManager : MonoBehaviour
     {
         if (handTrackingController == null) return;
 
+        // 获取头部位置（如果使用头部参考模式）
+        Vector3 headPos = Vector3.zero;
+        if (useHeadInWorldPositionReference && cameraRig != null)
+        {
+            headPos = cameraRig.centerEyeAnchor.position;
+        }
+
         // 右手
         if (handTrackingController.IsRightInputActive)
         {
-            _rightCalibrationOffset = handTrackingController.RightTargetPosition;
+            Vector3 rawPos = handTrackingController.RightTargetPosition;
+            _rightCalibrationOffset = useHeadInWorldPositionReference ? (rawPos - headPos) : rawPos;
             _rightCalibrationRotation = handTrackingController.RightTargetRotation;
             _isRightCalibrated = true;
             _lastSentRightTimestamp = 0f;
@@ -633,7 +676,8 @@ public class TeleopManager : MonoBehaviour
         // 左手
         if (handTrackingController.IsLeftInputActive)
         {
-            _leftCalibrationOffset = handTrackingController.LeftTargetPosition;
+            Vector3 rawPos = handTrackingController.LeftTargetPosition;
+            _leftCalibrationOffset = useHeadInWorldPositionReference ? (rawPos - headPos) : rawPos;
             _leftCalibrationRotation = handTrackingController.LeftTargetRotation;
             _isLeftCalibrated = true;
             _lastSentLeftTimestamp = 0f;

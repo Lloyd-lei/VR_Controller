@@ -101,6 +101,36 @@ public class HandTrackingController : MonoBehaviour
     /// <summary>左手中指-拇指捏合中点位置（Clutch 进度条定位用）</summary>
     public Vector3 LeftPinchMidpoint { get; private set; }
 
+    /// <summary>右手食指尖世界坐标</summary>
+    public Vector3 RightIndexTipPosition { get; private set; }
+
+    /// <summary>左手食指尖世界坐标</summary>
+    public Vector3 LeftIndexTipPosition { get; private set; }
+
+    /// <summary>右手食指尖世界旋转</summary>
+    public Quaternion RightIndexTipRotation { get; private set; } = Quaternion.identity;
+
+    /// <summary>左手食指尖世界旋转</summary>
+    public Quaternion LeftIndexTipRotation { get; private set; } = Quaternion.identity;
+
+    /// <summary>右手食指相对手腕向量（世界坐标差值）</summary>
+    public Vector3 RightIndexRelativeToWrist { get; private set; }
+
+    /// <summary>左手食指相对手腕向量（世界坐标差值）</summary>
+    public Vector3 LeftIndexRelativeToWrist { get; private set; }
+
+    /// <summary>右手食指相对手腕的局部位移（手腕局部坐标）</summary>
+    public Vector3 RightIndexRelativeLocalPosition { get; private set; }
+
+    /// <summary>左手食指相对手腕的局部位移（手腕局部坐标）</summary>
+    public Vector3 LeftIndexRelativeLocalPosition { get; private set; }
+
+    /// <summary>右手食指相对手腕的局部旋转</summary>
+    public Quaternion RightIndexRelativeLocalRotation { get; private set; } = Quaternion.identity;
+
+    /// <summary>左手食指相对手腕的局部旋转</summary>
+    public Quaternion LeftIndexRelativeLocalRotation { get; private set; } = Quaternion.identity;
+
     // ──────────────── 向后兼容属性（映射到右手） ────────────────
 
     /// <summary>当前目标位置（向后兼容，等同于 RightTargetPosition）</summary>
@@ -142,6 +172,10 @@ public class HandTrackingController : MonoBehaviour
     private Transform _leftThumbTip;
     private Transform _leftMiddleTip;
     private bool _leftPinchBonesFound;
+
+    // 食指 tip 骨骼缓存
+    private Transform _rightIndexTip;
+    private Transform _leftIndexTip;
 
     // ──────────────── Unity 生命周期 ────────────────
 
@@ -209,6 +243,11 @@ public class HandTrackingController : MonoBehaviour
         {
             IsRightInputActive = false;
             RightMiddlePinchStrength = 0f;
+            RightIndexTipPosition = RightTargetPosition;
+            RightIndexTipRotation = RightTargetRotation;
+            RightIndexRelativeToWrist = Vector3.zero;
+            RightIndexRelativeLocalPosition = Vector3.zero;
+            RightIndexRelativeLocalRotation = Quaternion.identity;
             return;
         }
 
@@ -222,6 +261,11 @@ public class HandTrackingController : MonoBehaviour
         if (_rightWristTransform == null)
         {
             IsRightInputActive = false;
+            RightIndexTipPosition = RightTargetPosition;
+            RightIndexTipRotation = RightTargetRotation;
+            RightIndexRelativeToWrist = Vector3.zero;
+            RightIndexRelativeLocalPosition = Vector3.zero;
+            RightIndexRelativeLocalRotation = Quaternion.identity;
             return;
         }
 
@@ -247,6 +291,17 @@ public class HandTrackingController : MonoBehaviour
         RightPinchMidpoint = _rightPinchBonesFound
             ? (_rightThumbTip.position + _rightMiddleTip.position) * 0.5f
             : RightTargetPosition + Vector3.up * 0.05f;
+
+        if (_rightIndexTip == null)
+        {
+            _rightIndexTip = FindBoneTransform(rightOvrSkeleton, OVRSkeleton.BoneId.Hand_IndexTip);
+            if (_rightIndexTip == null) _rightIndexTip = FindBoneTransform(rightOvrSkeleton, OVRSkeleton.BoneId.Hand_Index3);
+        }
+        RightIndexTipPosition = _rightIndexTip != null ? _rightIndexTip.position : RightTargetPosition;
+        RightIndexTipRotation = _rightIndexTip != null ? _rightIndexTip.rotation : RightTargetRotation;
+        RightIndexRelativeToWrist = RightIndexTipPosition - RightTargetPosition;
+        RightIndexRelativeLocalPosition = Quaternion.Inverse(RightTargetRotation) * RightIndexRelativeToWrist;
+        RightIndexRelativeLocalRotation = Quaternion.Inverse(RightTargetRotation) * RightIndexTipRotation;
 
         IsRightInputActive = true;
     }
@@ -280,6 +335,11 @@ public class HandTrackingController : MonoBehaviour
             IsLeftInputActive = false;
             LeftMiddlePinchStrength = 0f;
             LeftPinkyPinchStrength = 0f;
+            LeftIndexTipPosition = LeftTargetPosition;
+            LeftIndexTipRotation = LeftTargetRotation;
+            LeftIndexRelativeToWrist = Vector3.zero;
+            LeftIndexRelativeLocalPosition = Vector3.zero;
+            LeftIndexRelativeLocalRotation = Quaternion.identity;
             return;
         }
 
@@ -293,6 +353,11 @@ public class HandTrackingController : MonoBehaviour
         if (_leftWristTransform == null)
         {
             IsLeftInputActive = false;
+            LeftIndexTipPosition = LeftTargetPosition;
+            LeftIndexTipRotation = LeftTargetRotation;
+            LeftIndexRelativeToWrist = Vector3.zero;
+            LeftIndexRelativeLocalPosition = Vector3.zero;
+            LeftIndexRelativeLocalRotation = Quaternion.identity;
             return;
         }
 
@@ -321,6 +386,17 @@ public class HandTrackingController : MonoBehaviour
         LeftPinchMidpoint = _leftPinchBonesFound
             ? (_leftThumbTip.position + _leftMiddleTip.position) * 0.5f
             : LeftTargetPosition + Vector3.up * 0.05f;
+
+        if (_leftIndexTip == null)
+        {
+            _leftIndexTip = FindBoneTransform(leftOvrSkeleton, OVRSkeleton.BoneId.Hand_IndexTip);
+            if (_leftIndexTip == null) _leftIndexTip = FindBoneTransform(leftOvrSkeleton, OVRSkeleton.BoneId.Hand_Index3);
+        }
+        LeftIndexTipPosition = _leftIndexTip != null ? _leftIndexTip.position : LeftTargetPosition;
+        LeftIndexTipRotation = _leftIndexTip != null ? _leftIndexTip.rotation : LeftTargetRotation;
+        LeftIndexRelativeToWrist = LeftIndexTipPosition - LeftTargetPosition;
+        LeftIndexRelativeLocalPosition = Quaternion.Inverse(LeftTargetRotation) * LeftIndexRelativeToWrist;
+        LeftIndexRelativeLocalRotation = Quaternion.Inverse(LeftTargetRotation) * LeftIndexTipRotation;
 
         IsLeftInputActive = true;
     }
@@ -437,6 +513,11 @@ public class HandTrackingController : MonoBehaviour
         if (!IsRightControllerConnected)
         {
             IsRightInputActive = false;
+            RightIndexTipPosition = RightTargetPosition;
+            RightIndexTipRotation = RightTargetRotation;
+            RightIndexRelativeToWrist = Vector3.zero;
+            RightIndexRelativeLocalPosition = Vector3.zero;
+            RightIndexRelativeLocalRotation = Quaternion.identity;
             return;
         }
 
@@ -450,6 +531,12 @@ public class HandTrackingController : MonoBehaviour
         // Grip 按钮作为使能开关（按住 Grip 才发送指令）
         float gripValue = OVRInput.Get(OVRInput.Axis1D.SecondaryHandTrigger);
         IsRightInputActive = gripValue >= gripEnableThreshold;
+
+        RightIndexTipPosition = RightTargetPosition;
+        RightIndexTipRotation = RightTargetRotation;
+        RightIndexRelativeToWrist = Vector3.zero;
+        RightIndexRelativeLocalPosition = Vector3.zero;
+        RightIndexRelativeLocalRotation = Quaternion.identity;
     }
 
     // ──────────────── 左手手柄模式更新 ────────────────
@@ -465,6 +552,11 @@ public class HandTrackingController : MonoBehaviour
         if (!IsLeftControllerConnected)
         {
             IsLeftInputActive = false;
+            LeftIndexTipPosition = LeftTargetPosition;
+            LeftIndexTipRotation = LeftTargetRotation;
+            LeftIndexRelativeToWrist = Vector3.zero;
+            LeftIndexRelativeLocalPosition = Vector3.zero;
+            LeftIndexRelativeLocalRotation = Quaternion.identity;
             return;
         }
 
@@ -478,5 +570,11 @@ public class HandTrackingController : MonoBehaviour
         // Grip 按钮作为使能开关
         float gripValue = OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger);
         IsLeftInputActive = gripValue >= gripEnableThreshold;
+
+        LeftIndexTipPosition = LeftTargetPosition;
+        LeftIndexTipRotation = LeftTargetRotation;
+        LeftIndexRelativeToWrist = Vector3.zero;
+        LeftIndexRelativeLocalPosition = Vector3.zero;
+        LeftIndexRelativeLocalRotation = Quaternion.identity;
     }
 }

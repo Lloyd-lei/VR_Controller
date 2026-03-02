@@ -43,10 +43,21 @@ public class ROSBridgeConnection : MonoBehaviour
     [Header("右手话题")]
     [SerializeField] private string rightPoseTopic = "/quest3/right_hand_pose";
     [SerializeField] private string rightGripperTopic = "/quest3/right_gripper";
+    [SerializeField] private string rightIndexRelativeTopic = "/quest3/right_index_relative";
+    [SerializeField] private string rightIndexRelativePoseTopic = "/quest3/right_index_relative_pose";
 
     [Header("左手话题")]
     [SerializeField] private string leftPoseTopic = "/quest3/left_hand_pose";
     [SerializeField] private string leftGripperTopic = "/quest3/left_gripper";
+    [SerializeField] private string leftIndexRelativeTopic = "/quest3/left_index_relative";
+    [SerializeField] private string leftIndexRelativePoseTopic = "/quest3/left_index_relative_pose";
+
+    [Header("Clutch 话题")]
+    [SerializeField] private string clutchTopic = "/quest3/clutch";
+
+    [Header("坐标系")]
+    [Tooltip("发送 ROS2 REP 103 右手系 (X前 Y左 Z上)")]
+    [SerializeField] private bool useROS2Coordinates = true;
 
     [Header("连接设置")]
     [Tooltip("重连基础间隔（秒），指数退避 ×1.5")]
@@ -129,8 +140,13 @@ public class ROSBridgeConnection : MonoBehaviour
     // 话题 advertise
     private bool _rightPoseAdvertised;
     private bool _rightGripperAdvertised;
+    private bool _rightIndexRelativeAdvertised;
+    private bool _rightIndexRelativePoseAdvertised;
     private bool _leftPoseAdvertised;
     private bool _leftGripperAdvertised;
+    private bool _leftIndexRelativeAdvertised;
+    private bool _leftIndexRelativePoseAdvertised;
+    private bool _clutchAdvertised;
 
     // 重连
     private bool _shouldReconnect;
@@ -244,6 +260,20 @@ public class ROSBridgeConnection : MonoBehaviour
         EnqueueFloat32Message(rightGripperTopic, value);
     }
 
+    public void PublishRightIndexRelative(Vector3 relative, string frameId = "quest3_right_wrist")
+    {
+        if (State != ConnectionState.Connected) return;
+        EnsureAdvertised(ref _rightIndexRelativeAdvertised, rightIndexRelativeTopic, "geometry_msgs/Vector3Stamped");
+        EnqueueVector3StampedMessage(rightIndexRelativeTopic, relative, frameId);
+    }
+
+    public void PublishRightIndexRelativePose(Vector3 localPos, Quaternion localRot, string frameId = "quest3_right_wrist")
+    {
+        if (State != ConnectionState.Connected) return;
+        EnsureAdvertised(ref _rightIndexRelativePoseAdvertised, rightIndexRelativePoseTopic, "geometry_msgs/PoseStamped");
+        EnqueuePoseMessage(rightIndexRelativePoseTopic, localPos, localRot, frameId);
+    }
+
     // ══════════════════════════════════════════════════
     //               左手发布接口
     // ══════════════════════════════════════════════════
@@ -260,6 +290,30 @@ public class ROSBridgeConnection : MonoBehaviour
         if (State != ConnectionState.Connected) return;
         EnsureAdvertised(ref _leftGripperAdvertised, leftGripperTopic, "std_msgs/Float32");
         EnqueueFloat32Message(leftGripperTopic, value);
+    }
+
+    public void PublishLeftIndexRelative(Vector3 relative, string frameId = "quest3_left_wrist")
+    {
+        if (State != ConnectionState.Connected) return;
+        EnsureAdvertised(ref _leftIndexRelativeAdvertised, leftIndexRelativeTopic, "geometry_msgs/Vector3Stamped");
+        EnqueueVector3StampedMessage(leftIndexRelativeTopic, relative, frameId);
+    }
+
+    public void PublishLeftIndexRelativePose(Vector3 localPos, Quaternion localRot, string frameId = "quest3_left_wrist")
+    {
+        if (State != ConnectionState.Connected) return;
+        EnsureAdvertised(ref _leftIndexRelativePoseAdvertised, leftIndexRelativePoseTopic, "geometry_msgs/PoseStamped");
+        EnqueuePoseMessage(leftIndexRelativePoseTopic, localPos, localRot, frameId);
+    }
+
+    /// <summary>
+    /// 发布 Clutch 状态 (std_msgs/Bool)
+    /// </summary>
+    public void PublishClutch(bool engaged)
+    {
+        if (State != ConnectionState.Connected) return;
+        EnsureAdvertised(ref _clutchAdvertised, clutchTopic, "std_msgs/Bool");
+        EnqueueBoolMessage(clutchTopic, engaged);
     }
 
     // ══════════════════════════════════════════════════
@@ -293,12 +347,23 @@ public class ROSBridgeConnection : MonoBehaviour
         void Unadv(string t) => _sendQueue.Enqueue($"{{\"op\":\"unadvertise\",\"topic\":\"{t}\"}}");
         Unadv(rightPoseTopic);
         Unadv(rightGripperTopic);
+        Unadv(rightIndexRelativeTopic);
+        Unadv(rightIndexRelativePoseTopic);
         Unadv(leftPoseTopic);
         Unadv(leftGripperTopic);
+        Unadv(leftIndexRelativeTopic);
+        Unadv(leftIndexRelativePoseTopic);
     }
 
     private void EnqueuePoseMessage(string topic, Vector3 pos, Quaternion rot, string frameId)
     {
+        // Unity 左手系 → ROS2 REP 103 右手系 (X前 Y左 Z上)
+        if (useROS2Coordinates)
+        {
+            pos = ROSCoordinateConverter.UnityToROS(pos);
+            rot = ROSCoordinateConverter.UnityToROS(rot);
+        }
+
         long stamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         int sec = (int)(stamp / 1000);
         int nsec = (int)((stamp % 1000) * 1000000);
@@ -319,11 +384,42 @@ public class ROSBridgeConnection : MonoBehaviour
         _sendQueue.Enqueue(_jsonBuilder.ToString());
     }
 
+    private void EnqueueVector3StampedMessage(string topic, Vector3 vec, string frameId)
+    {
+        if (useROS2Coordinates)
+        {
+            vec = ROSCoordinateConverter.UnityToROS(vec);
+        }
+
+        long stamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        int sec = (int)(stamp / 1000);
+        int nsec = (int)((stamp % 1000) * 1000000);
+
+        _jsonBuilder.Clear();
+        _jsonBuilder.Append("{\"op\":\"publish\",\"topic\":\"").Append(topic);
+        _jsonBuilder.Append("\",\"msg\":{\"header\":{\"stamp\":{\"sec\":").Append(sec);
+        _jsonBuilder.Append(",\"nanosec\":").Append(nsec);
+        _jsonBuilder.Append("},\"frame_id\":\"").Append(frameId);
+        _jsonBuilder.Append("\"},\"vector\":{\"x\":").Append(vec.x.ToString("F6"));
+        _jsonBuilder.Append(",\"y\":").Append(vec.y.ToString("F6"));
+        _jsonBuilder.Append(",\"z\":").Append(vec.z.ToString("F6"));
+        _jsonBuilder.Append("}}}");
+        _sendQueue.Enqueue(_jsonBuilder.ToString());
+    }
+
     private void EnqueueFloat32Message(string topic, float value)
     {
         _jsonBuilder.Clear();
         _jsonBuilder.Append("{\"op\":\"publish\",\"topic\":\"").Append(topic);
         _jsonBuilder.Append("\",\"msg\":{\"data\":").Append(value.ToString("F4")).Append("}}");
+        _sendQueue.Enqueue(_jsonBuilder.ToString());
+    }
+
+    private void EnqueueBoolMessage(string topic, bool value)
+    {
+        _jsonBuilder.Clear();
+        _jsonBuilder.Append("{\"op\":\"publish\",\"topic\":\"").Append(topic);
+        _jsonBuilder.Append("\",\"msg\":{\"data\":").Append(value ? "true" : "false").Append("}}");
         _sendQueue.Enqueue(_jsonBuilder.ToString());
     }
 
@@ -356,8 +452,13 @@ public class ROSBridgeConnection : MonoBehaviour
     {
         _rightPoseAdvertised = false;
         _rightGripperAdvertised = false;
+        _rightIndexRelativeAdvertised = false;
+        _rightIndexRelativePoseAdvertised = false;
         _leftPoseAdvertised = false;
         _leftGripperAdvertised = false;
+        _leftIndexRelativeAdvertised = false;
+        _leftIndexRelativePoseAdvertised = false;
+        _clutchAdvertised = false;
     }
 
     // ══════════════════════════════════════════════════
